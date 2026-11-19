@@ -451,7 +451,7 @@ window.addEventListener('pagehide',persist);
 function answered(){return Object.keys(S).some(function(k){if(['flags','step','tipSeen','savedAt','exportedAt','base','fee','orig','regime'].indexOf(k)>-1)return false;var v=S[k];return Array.isArray(v)?v.length>0:(v&&typeof v==='object')?Object.keys(v).length>0:(v!=null&&v!==''&&v!==false);});}
 
 /* ================= capa ================= */
-var qp=new URLSearchParams(location.search).get('para');
+var qp=null;try{qp=(new URLSearchParams(location.search).get('para')||'').trim().slice(0,80)||null;}catch(e){}
 function paintCover(){
   var name=qp||S.office;if(name){$('#para').textContent=name;$('#paraBox').hidden=false;}else $('#paraBox').hidden=true;
   var m=new Intl.DateTimeFormat('pt-BR',{month:'long',year:'numeric'}).format(new Date());$('#month').textContent=m.charAt(0).toUpperCase()+m.slice(1);
@@ -582,6 +582,7 @@ var CH4=[['oferece','Sim, oferecemos'],['depende','Depende do perfil'],['naoofer
 var STEPS=[
  {name:'Escritório',title:'O <b>escritório</b>',lead:'Comece pelo básico: quem são e o tamanho da operação. No gráfico, cada ponto é um assessor e o tamanho mostra quanto da custódia ele carrega.',viz:'constellation',
   ess:['office','platform','auc','adv','top5'],build:function(p){
+   if(!S.office&&qp){S.office=qp;dirty=true;}
    p.appendChild(text({key:'office',label:'Nome do escritório',ph:'Ex.: Alfa Investimentos',auto:'organization'}));
    p.appendChild(text({key:'contact',label:'Quem está respondendo',ph:'Nome e cargo',auto:'name'}));
    p.appendChild(choice({key:'platform',multi:true,label:'Em quais plataformas vocês operam?',hint:'Pode marcar mais de uma: desde a Resolução CVM 178, o escritório pode atuar com mais de uma instituição.',opts:[['xp','XP'],['btg','BTG Pactual'],['genial','Genial'],['itau','Itaú'],['safra','Safra'],['santander','Santander'],['agora','Ágora (Bradesco)'],['warren','Warren'],['inter','Inter'],['avenue','Avenue (exterior)'],['outra','Outra']]}));
@@ -821,7 +822,7 @@ function renderReview(p){
   h+='</div><div class="rev">';
   STEPS.forEach(function(s,i){h+='<h3>'+(i+1)+'. '+s.name+' <button type="button" class="linkb" data-go="'+i+'">Editar</button></h3><dl>';
     Q.filter(function(q){return q[0]===i&&relevant(q[1]);}).forEach(function(q){var a=fmtAns(q[1],q[3]),f=S.flags[q[1]];h+='<div><dt>'+q[2]+'</dt><dd class="'+(a||f?'':'no')+'">'+(a?esc(a):(f?'':'Sem resposta'))+(f?' <span class="tag">'+LBL[f==='confirmar'?'x':'reuniao']+'</span>':'')+'</dd></div>';});h+='</dl>';});
-  h+='</div><section class="export"><h3>Enviar à Exorta</h3><p>O relatório é gerado neste aparelho e abre em qualquer navegador, já formatado para leitura e impressão em PDF. Nada é enviado automaticamente: depois de baixar, envie o arquivo pelo canal combinado com a Exorta (e-mail ou WhatsApp).</p><div class="row"><button type="button" class="pri" data-x="html">Baixar relatório</button><button type="button" data-x="doc">Baixar para Word</button><button type="button" data-x="json">Arquivo de dados (.json)</button><button type="button" data-x="copy">Copiar resumo</button></div><p class="xnote">O relatório também guarda as respostas: se precisar retomar, use “Retomar de um arquivo salvo” na capa.</p><p class="st" id="xst" aria-live="polite">'+(S.exportedAt?'Último arquivo gerado em '+new Date(S.exportedAt).toLocaleString('pt-BR')+'.':'')+'</p><div class="copybox" id="copybox"></div></section>';
+  h+='</div><section class="export"><h3>Enviar à Exorta</h3><p>O relatório é gerado neste aparelho e abre em qualquer navegador, já formatado para leitura e impressão em PDF. Nada é enviado automaticamente: depois de baixar, envie o arquivo pelo canal combinado com a Exorta (e-mail ou WhatsApp).</p><div class="row"><button type="button" class="pri" data-x="html">Baixar relatório</button><button type="button" data-x="doc">Baixar para Word (.docx)</button><button type="button" data-x="json">Arquivo de dados (.json)</button><button type="button" data-x="copy">Copiar resumo</button></div><p class="xnote">O relatório também guarda as respostas: se precisar retomar, use “Retomar de um arquivo salvo” na capa.</p><p class="st" id="xst" aria-live="polite">'+(S.exportedAt?'Último arquivo gerado em '+new Date(S.exportedAt).toLocaleString('pt-BR')+'.':'')+'</p><div class="copybox" id="copybox"></div></section>';
   p.innerHTML=h.replace(/<span class="tag">undefined<\/span>/g,'<span class="tag">A confirmar</span>');
   $$('[data-go]',p).forEach(function(b){b.addEventListener('click',function(){go(+b.dataset.go,false,b.dataset.k);});});
   $$('[data-x]',p).forEach(function(b){b.addEventListener('click',function(){b.dataset.x==='copy'?copyText():exportFile(b.dataset.x);});});
@@ -843,14 +844,58 @@ function buildReport(word){var R=rev(),c=calcData(),d=new Date(),office=S.office
   h+='<footer>Documento gerado no aparelho do escritório, sem envio automático. Os números foram informados pelo próprio escritório e os cálculos são estimativas para a conversa com a Exorta. Confidencial.</footer></div>';
   if(!word)h+='<script type="application/json" id="exorta-dados">'+buildJSON().replace(/</g,'\\u003c')+'<\/script>';
   return h+'</body></html>';}
+
+/* ---- .docx real (zip sem compressão) ---- */
+var CRCT=(function(){var t=[];for(var n=0;n<256;n++){var c=n;for(var k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0;}return t;})();
+function crc32(b){var c=0xFFFFFFFF;for(var i=0;i<b.length;i++)c=CRCT[(c^b[i])&255]^(c>>>8);return (c^0xFFFFFFFF)>>>0;}
+function zipStore(files){var enc=new TextEncoder(),parts=[],cd=[],off=0;
+  function u16(v){return [v&255,(v>>>8)&255];}function u32(v){return [v&255,(v>>>8)&255,(v>>>16)&255,(v>>>24)&255];}
+  files.forEach(function(f){var nm=enc.encode(f[0]),d=enc.encode(f[1]),cr=crc32(d);
+    var lh=[].concat(u32(0x04034b50),u16(20),u16(0x0800),u16(0),u16(0),u16(0x21),u32(cr),u32(d.length),u32(d.length),u16(nm.length),u16(0));
+    parts.push(new Uint8Array(lh),nm,d);
+    cd.push([].concat(u32(0x02014b50),u16(20),u16(20),u16(0x0800),u16(0),u16(0),u16(0x21),u32(cr),u32(d.length),u32(d.length),u16(nm.length),u16(0),u16(0),u16(0),u16(0),u32(0),u32(off)),nm);
+    off+=lh.length+nm.length+d.length;});
+  var cdStart=off,cdLen=0;cd.forEach(function(x){var a=Array.isArray(x)?new Uint8Array(x):x;parts.push(a);cdLen+=a.length;});
+  parts.push(new Uint8Array([].concat(u32(0x06054b50),u16(0),u16(0),u16(files.length),u16(files.length),u32(cdLen),u32(cdStart),u16(0))));
+  return new Blob(parts,{type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});}
+function xe(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function stripTags(s){return String(s==null?'':s).replace(/<[^>]+>/g,'');}
+function wr(t,o){o=o||{};return '<w:r><w:rPr>'+(o.b?'<w:b/>':'')+(o.i?'<w:i/>':'')+'<w:color w:val="'+(o.c||'2E0F1E')+'"/><w:sz w:val="'+(o.sz||20)+'"/></w:rPr><w:t xml:space="preserve">'+xe(t)+'</w:t></w:r>';}
+function wp(runs,o){o=o||{};return '<w:p><w:pPr><w:spacing w:before="'+(o.bf||0)+'" w:after="'+(o.af==null?80:o.af)+'"/>'+(o.border?'<w:pBdr><w:bottom w:val="single" w:sz="12" w:space="4" w:color="C57649"/></w:pBdr>':'')+'</w:pPr>'+runs+'</w:p>';}
+function wcell(content,w,fill){return '<w:tc><w:tcPr><w:tcW w:w="'+w+'" w:type="dxa"/>'+(fill?'<w:shd w:val="clear" w:color="auto" w:fill="'+fill+'"/>':'')+'</w:tcPr>'+content+'</w:tc>';}
+function wtable(rows){var h='<w:tbl><w:tblPr><w:tblW w:w="9360" w:type="dxa"/><w:tblBorders><w:insideH w:val="single" w:sz="4" w:color="E6DCCF"/><w:bottom w:val="single" w:sz="4" w:color="E6DCCF"/><w:top w:val="single" w:sz="4" w:color="E6DCCF"/></w:tblBorders><w:tblCellMar><w:top w:w="80" w:type="dxa"/><w:bottom w:w="80" w:type="dxa"/><w:left w:w="100" w:type="dxa"/><w:right w:w="100" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="4300"/><w:gridCol w:w="5060"/></w:tblGrid>';
+  rows.forEach(function(r){var tot=r.tot,fill=tot?'2E0F1E':null,col=tot?'FFFFFF':null;
+    h+='<w:tr>'+wcell(wp(wr(r.k,{c:col||'5A2A4B',b:tot}),{af:0}),4300,fill)+wcell(wp(wr(r.v,{b:true,c:col||(r.muted?'8D6B85':'2E0F1E'),i:r.muted}),{af:r.sub?20:0})+(r.sub?wp(wr(r.sub,{sz:16,c:col||'8D6B85'}),{af:0}):''),5060,fill)+'</w:tr>';});
+  return h+'</w:tbl>';}
+function buildDocx(){var R=rev(),c=calcData(),d=new Date(),office=S.office||'Escritório não informado',b='';
+  b+=wp(wr('EXORTA',{b:true,c:'5A2A4B',sz:22}),{af:120});
+  b+=wp(wr('Diagnóstico de expansão',{b:true,sz:40}),{af:60});
+  b+=wp(wr(office,{b:true,c:'5A2A4B',sz:20})+wr('  |  gerado em '+d.toLocaleDateString('pt-BR')+' às '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}),{c:'5A2A4B',sz:20}),{af:240,border:true});
+  var H=function(t){return wp(wr(t,{b:true,c:'5A2A4B',sz:26}),{bf:280,af:120});};
+  b+=H('Visão geral');b+=wtable(kpis().map(function(k){return k[1]?{k:k[0],v:k[1],sub:k[4]||''}:{k:k[0],v:'Não informado',muted:true};}));
+  if(c){b+=H('Calculadora de receita e repasses');b+=wtable(c.rows.map(function(r){return {k:r[0],v:stripTags(r[1]),sub:stripTags(r[2]||''),tot:!!r[3]};}));
+    if(c.flag)b+=wp(wr(stripTags(c.flag),{c:'A35A31',b:true}),{bf:120});
+    b+=wp(wr('Estimativa feita com as respostas do escritório. No Lucro Presumido, os tributos consideram presunção de 32% para IRPJ (15% + adicional de 10%) e CSLL (9%), PIS 0,65% e COFINS 3%, mais o ISS do município. Não substitui a apuração do contador.',{sz:16,c:'8D6B85'}),{bf:120});}
+  var cur2=-1,acc=[];var flush=function(){if(acc.length){b+=wtable(acc);acc=[];}};
+  rows().forEach(function(r){if(r.etapa!==cur2){flush();cur2=r.etapa;b+=H(r.etapa+'. '+r.etapa_nome);}
+    acc.push(r.resposta?{k:r.pergunta,v:r.resposta}:{k:r.pergunta,v:r.situacao==='a_confirmar'?'A confirmar':r.situacao==='discutir_na_reuniao'?'Conversar na reunião':'Sem resposta',muted:true});});flush();
+  b+=wp(wr('Documento gerado no aparelho do escritório, sem envio automático. Os números foram informados pelo próprio escritório e os cálculos são estimativas para a conversa com a Exorta. Confidencial.',{sz:16,c:'8D6B85'}),{bf:360});
+  var doc='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'+b+'<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="567" w:footer="567" w:gutter="0"/></w:sectPr></w:body></w:document>';
+  var styles='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:cs="Calibri"/><w:sz w:val="20"/><w:lang w:val="pt-BR"/></w:rPr></w:rPrDefault></w:docDefaults></w:styles>';
+  return zipStore([
+   ['[Content_Types].xml','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>'],
+   ['_rels/.rels','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>'],
+   ['word/_rels/document.xml.rels','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'],
+   ['word/document.xml',doc],['word/styles.xml',styles]]);}
 function buildJSON(){var copy=JSON.parse(JSON.stringify(S));return JSON.stringify({schema:APP,schema_version:VERSION,gerado_em:new Date().toISOString(),origem:'Arquivo HTML local da Exorta. Sem envio automático.',escritorio:S.office||null,respostas:rows(),indicadores:indicators(),rascunho:copy},null,2);}
 var DL=null,FRAMED=false;try{FRAMED=window.self!==window.top;}catch(e){FRAMED=true;}
-try{if(window.claude&&typeof window.claude.use==='function')window.claude.use('downloads').then(function(d){DL=d;var w=document.querySelector('[data-x=doc]');if(d&&w)w.hidden=true;}).catch(function(){});}catch(e){}
+try{if(window.claude&&typeof window.claude.use==='function')window.claude.use('downloads').then(function(d){DL=d;}).catch(function(){});}catch(e){}
 function exportFile(kind,backup){persist();
-  if(DL){if(kind==='doc')kind='html';var b2=kind==='json'?buildJSON():kind==='html'?buildReport(false):buildText(),n2='exorta-diagnostico-'+slug()+'-'+stamp()+'.'+kind;
+  if(kind==='doc')kind='docx';
+  if(DL){var b2=kind==='json'?buildJSON():kind==='html'?buildReport(false):kind==='docx'?buildDocx():buildText(),n2='exorta-diagnostico-'+slug()+'-'+stamp()+'.'+kind;
     DL.save({filename:n2,data:b2}).then(function(){if(!backup){S.exportedAt=new Date().toISOString();dirty=true;persist();}var st=$('#xst');if(st)st.textContent='Arquivo gerado: '+n2+'. Envie-o à Exorta.';toast(backup?'Cópia de segurança gerada.':'Arquivo gerado. Envie-o à Exorta.');},function(e){if(e&&e.code==='declined')toast('Download cancelado.');else showCopy(buildText());});return;}
-  if(FRAMED){showCopy(buildText());toast('Este visualizador não permite baixar. Copie o resumo abaixo.');return;}var body=kind==='json'?buildJSON():kind==='html'?buildReport(false):kind==='doc'?'\ufeff'+buildReport(true):buildText(),name='exorta-diagnostico-'+slug()+'-'+stamp()+'.'+kind,type={json:'application/json',html:'text/html',doc:'application/msword',txt:'text/plain'}[kind]+';charset=utf-8';
-  try{var u=URL.createObjectURL(new Blob([body],{type:type})),a=document.createElement('a');a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(u);},60000);
+  if(FRAMED){showCopy(buildText());toast('Este visualizador não permite baixar. Copie o resumo abaixo.');return;}var body=kind==='json'?buildJSON():kind==='html'?buildReport(false):kind==='docx'?buildDocx():buildText(),name='exorta-diagnostico-'+slug()+'-'+stamp()+'.'+kind,type=kind==='docx'?'application/vnd.openxmlformats-officedocument.wordprocessingml.document':{json:'application/json',html:'text/html',txt:'text/plain'}[kind]+';charset=utf-8';
+  try{var u=URL.createObjectURL(body instanceof Blob?body:new Blob([body],{type:type})),a=document.createElement('a');a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(u);},60000);
     if(!backup){S.exportedAt=new Date().toISOString();dirty=true;persist();}var st=$('#xst');if(st)st.textContent='Arquivo gerado: '+name+'. Envie-o à Exorta. Se o download não aparecer, use “Copiar resumo”.';toast(backup?'Cópia de segurança gerada.':'Arquivo gerado. Envie-o à Exorta.');}
   catch(e){showCopy(kind==='json'?body:buildText());}}
 function copyText(){var t=buildText();var ok=function(){toast('Resumo copiado. Cole em um e-mail ou mensagem para a Exorta.');};if(navigator.clipboard&&window.isSecureContext)navigator.clipboard.writeText(t).then(ok,function(){showCopy(t);});else showCopy(t);}
